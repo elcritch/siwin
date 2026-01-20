@@ -8,7 +8,7 @@ when not siwin_use_lib:
   when defined(android):
     import ./platforms/android/window as androidWindow
 
-  elif defined(linux) or defined(bsd):
+  elif defined(linux) or defined(bsd) or defined(feature.siwin.x11) or defined(feature.siwin.wayland):
     import ./platforms
     
     import ./platforms/x11/siwinGlobals as x11SiwinGlobals
@@ -28,7 +28,7 @@ when not siwin_use_lib:
     when defined(android):
       1
 
-    elif defined(linux) or defined(bsd):
+    elif defined(linux) or defined(bsd) or defined(feature.siwin.x11) or defined(feature.siwin.wayland):
       if globals of SiwinGlobalsX11:
         result = globals.SiwinGlobalsX11.screenCountX11()
       elif globals of SiwinGlobalsWayland:
@@ -41,30 +41,32 @@ when not siwin_use_lib:
   proc screen*(globals: SiwinGlobals, number: int32): Screen =
     when defined(android):
       Screen()
+    
+    elif defined(windows):
+      screenWinapi(number)
 
-    elif defined(linux) or defined(bsd):
+    elif siwin_unix_desktop:
       if globals of SiwinGlobalsX11:
         result = globals.SiwinGlobalsX11.screenX11(number)
       elif globals of SiwinGlobalsWayland:
         result = globals.SiwinGlobalsWayland.screenWayland(number)
       else:
         raise SiwinPlatformSupportDefect.newException("Unsupported platform")
-    
-    elif defined(windows): screenWinapi(number)
 
   proc defaultScreen*(globals: SiwinGlobals): Screen =
     when defined(android):
       Screen()
+    
+    elif defined(windows):
+      defaultScreenWinapi()
 
-    elif defined(linux) or defined(bsd):
+    elif siwin_unix_desktop:
       if globals of SiwinGlobalsX11:
         result = globals.SiwinGlobalsX11.defaultScreenX11()
       elif globals of SiwinGlobalsWayland:
         result = globals.SiwinGlobalsWayland.defaultScreenWayland()
       else:
         raise SiwinPlatformSupportDefect.newException("Unsupported platform")
-    
-    elif defined(windows): defaultScreenWinapi()
 
 
   proc newSoftwareRenderingWindow*(
@@ -86,7 +88,21 @@ when not siwin_use_lib:
         resizable, fullscreen, frameless, transparent
       )
 
-    elif defined(linux) or defined(bsd):
+    elif defined(windows):
+      newSoftwareRenderingWindowWinapi(
+        size, title,
+        (if screen == -1: defaultScreenWinapi() else: screenWinapi(screen)),
+        resizable, fullscreen, frameless, transparent
+      )
+    
+    elif defined(macosx):
+      newSoftwareRenderingWindowCocoa(
+        size, title,
+        (if screen == -1: defaultScreenCocoa() else: screenCocoa(screen)),
+        resizable, fullscreen, frameless, transparent
+      )
+
+    elif siwin_unix_desktop:
       if globals of SiwinGlobalsX11:
         result = globals.SiwinGlobalsX11.newSoftwareRenderingWindowX11(
           size, title,
@@ -102,20 +118,6 @@ when not siwin_use_lib:
         )
       else:
         raise SiwinPlatformSupportDefect.newException("Unsupported platform")
-
-    elif defined(windows):
-      newSoftwareRenderingWindowWinapi(
-        size, title,
-        (if screen == -1: defaultScreenWinapi() else: screenWinapi(screen)),
-        resizable, fullscreen, frameless, transparent
-      )
-    
-    elif defined(macosx):
-      newSoftwareRenderingWindowCocoa(
-        size, title,
-        (if screen == -1: defaultScreenCocoa() else: screenCocoa(screen)),
-        resizable, fullscreen, frameless, transparent
-      )
 
 
 when defined(android):

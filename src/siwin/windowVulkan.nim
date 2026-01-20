@@ -6,9 +6,13 @@ when not siwin_use_lib:
   when defined(android):
     import ./platforms/android/window as androidWindow
 
-  elif defined(linux) or defined(bsd):
+  elif defined(windows):
+    import ./platforms/winapi/window as winapiWindow
+    import ./platforms/winapi/windowVulkan as winapiWindowVulkan
+
+  elif siwin_unix_desktop:
     import ./platforms
-    
+
     import ./platforms/x11/siwinGlobals as x11SiwinGlobals
     import ./platforms/x11/window as x11Window
     import ./platforms/x11/windowVulkan as x11WindowVulkan
@@ -16,11 +20,6 @@ when not siwin_use_lib:
     import ./platforms/wayland/siwinGlobals as waylandSiwinGlobals
     import ./platforms/wayland/window as waylandWindow
     import ./platforms/wayland/windowVulkan as waylandWindowVulkan
-
-  elif defined(windows):
-    import ./platforms/winapi/window as winapiWindow
-    import ./platforms/winapi/windowVulkan as winapiWindowVulkan
-
 
 
 when not siwin_use_lib:
@@ -45,7 +44,15 @@ when not siwin_use_lib:
         resizable, fullscreen, frameless, transparent, true
       )
 
-    elif defined(linux) or defined(bsd):
+    elif defined(windows):
+      newVulkanWindowWinapi(
+        vkInstance,
+        size, title,
+        (if screen == -1: defaultScreenWinapi() else: screenWinapi(screen)),
+        resizable, fullscreen, frameless, transparent
+      )
+
+    elif siwin_unix_desktop:
       if globals of SiwinGlobalsX11:
         globals.SiwinGlobalsX11.newVulkanWindowX11(
           vkInstance,
@@ -63,14 +70,6 @@ when not siwin_use_lib:
         )
       else:
         raise SiwinPlatformSupportDefect.newException("Unsupported platform")
-
-    elif defined(windows):
-      newVulkanWindowWinapi(
-        vkInstance,
-        size, title,
-        (if screen == -1: defaultScreenWinapi() else: screenWinapi(screen)),
-        resizable, fullscreen, frameless, transparent
-      )
 
 
 

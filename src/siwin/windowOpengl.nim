@@ -6,17 +6,6 @@ when not siwin_use_lib:
   when defined(android):
     import ./platforms/android/window as androidWindow
 
-  elif defined(linux) or defined(bsd):
-    import ./platforms
-    
-    import ./platforms/x11/siwinGlobals as x11SiwinGlobals
-    import ./platforms/x11/window as x11Window
-    import ./platforms/x11/windowOpengl as x11WindowOpengl
-    
-    import ./platforms/wayland/siwinGlobals as waylandSiwinGlobals
-    import ./platforms/wayland/window as waylandWindow
-    import ./platforms/wayland/windowOpengl as waylandWindowOpengl
-
   elif defined(windows):
     import ./platforms/winapi/window as winapiWindow
     import ./platforms/winapi/windowOpengl as winapiWindowOpengl
@@ -24,6 +13,16 @@ when not siwin_use_lib:
   elif defined(macosx):
     import ./platforms/cocoa/window as cocoaWindow
 
+  elif siwin_unix_desktop:
+    import ./platforms
+
+    import ./platforms/x11/siwinGlobals as x11SiwinGlobals
+    import ./platforms/x11/window as x11Window
+    import ./platforms/x11/windowOpengl as x11WindowOpengl
+
+    import ./platforms/wayland/siwinGlobals as waylandSiwinGlobals
+    import ./platforms/wayland/window as waylandWindow
+    import ./platforms/wayland/windowOpengl as waylandWindowOpengl
 
 
 when not siwin_use_lib:
@@ -47,7 +46,7 @@ when not siwin_use_lib:
         resizable, fullscreen, frameless, transparent, vsync
       )
 
-    elif defined(linux) or defined(bsd):
+    elif defined(linux) or defined(bsd) or defined(feature.siwin.x11) or defined(feature.siwin.wayland):
       if globals of SiwinGlobalsX11:
         result = globals.SiwinGlobalsX11.newOpenglWindowX11(
           size, title,

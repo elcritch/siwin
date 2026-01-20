@@ -13,11 +13,17 @@ const siwin_use_lib* {.booldefine.} = off
 
 const siwin_lib_link_dynamic* {.booldefine.} = off
 
+const siwin_unix_desktop* {.booldefine.} =
+  when (defined(linux) and not defined(android)) or
+        defined(bsd) or
+        defined(feature.siwin.x11) or
+        defined(feature.siwin.wayland): true
+  else: false
 
 when siwin_use_lib:
   when not compileOption("experimental", "vtables"):
     {.error: "-d:siwin_use_lib:on requires --experimental:vtables flag".}
-    
+
 when siwin_build_lib:
   when not compileOption("experimental", "vtables"):
     {.error: "-d:siwin_build_lib:on requires --experimental:vtables flag".}

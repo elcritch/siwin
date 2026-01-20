@@ -4,18 +4,18 @@ import ./platforms/any/window
 when not siwin_use_lib:
   when defined(android):
     import ./platforms/android/window
-  elif defined(linux) or defined(bsd):
-    import ./platforms/x11/[offscreen, siwinGlobals]
-    import ./platforms/wayland/[siwinGlobals]
   elif defined(windows):
     import ./platforms/winapi/offscreen
+  elif siwin_unix_desktop:
+    import ./platforms/x11/[offscreen, siwinGlobals]
+    import ./platforms/wayland/[siwinGlobals]
 
   proc newOpenglContext*(
     globals: SiwinGlobals
   ): Window =
     when defined(android):
       newOpenglWindowAndroid()
-    elif defined(linux) or defined(bsd):
+    elif defined(linux) or defined(bsd) or defined(feature.siwin.x11) or defined(feature.siwin.wayland):
       if globals of SiwinGlobalsX11:
         globals.SiwinGlobalsX11.newOpenglContextX11()
       elif globals of SiwinGlobalsWayland:

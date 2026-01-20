@@ -1,18 +1,16 @@
 import ./[siwindefs]
 import ./platforms/any/window
 
-
 when not siwin_use_lib:
   when defined(android):
-    ##
-  when (defined(linux) and not defined(android)) or defined(bsd):
+    discard
+  when siwin_unix_desktop:
     import ./platforms/wayland/siwinGlobals as waylandGlobals
     import ./platforms/x11/siwinGlobals as x11Globals
   when defined(windows):
-    ##
+    discard
   when defined(macosx):
-    ##
-
+    discard
 
 when siwin_use_pure_enums:
   {.pragma: siwin_enum, pure.}
@@ -41,7 +39,7 @@ when not siwin_use_lib:
     elif defined(android):
       @[Platform.android]
     
-    elif defined(linux) or defined(bsd):
+    elif defined(linux) or defined(bsd) or defined(feature.siwin.x11) or defined(feature.siwin.wayland):
       if isWaylandAvailable():
         @[Platform.wayland, Platform.x11]
         # x11 is available on wayland compositors through XWayland
@@ -95,7 +93,13 @@ when not siwin_use_lib:
     when defined(android):
       result = SiwinGlobals()
 
-    elif defined(linux) or defined(bsd):
+    elif defined(windows):
+      result = SiwinGlobals()
+    
+    elif defined(macosx):
+      result = SiwinGlobals()
+    
+    elif siwin_unix_desktop:
       case availablePlatforms().platformToUse(preferedPlatform)
       of x11:
         return newX11Globals()
@@ -104,12 +108,6 @@ when not siwin_use_lib:
         result.SiwinGlobalsWayland.roundtrip()
       else:
         raise SiwinPlatformSupportDefect.newException("Unsupported platform")
-    
-    elif defined(windows):
-      result = SiwinGlobals()
-    
-    elif defined(macosx):
-      result = SiwinGlobals()
     
     else:
       {.error.}
