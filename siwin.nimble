@@ -29,6 +29,8 @@ feature "test":
 feature "android":
   requires "https://github.com/levovix0/dali"
   requires "https://github.com/levovix0/marco@0.1.2"
+  requires "jnim >= 0.5.2"
+  requires "https://github.com/yglukhov/android"
 
 when defined(linux) or defined(bsd):
   requires "x11 >= 1.1"
