@@ -1,5 +1,5 @@
-import macros, tables, sequtils, strutils
-import vmath, opengl, pixie, fusion/astdsl, fusion/matching, shady
+import macros, tables, strutils
+import vmath, opengl, pixie, shady
 import siwin/siwindefs
 
 when (compiles do: import imageman):
@@ -307,7 +307,7 @@ macro makeShader*(ctx: DrawContext, body: untyped): auto =
   var
     vert: NimNode
     frag: NimNode
-    uniforms: Table[string, NimNode]
+    uniforms = initTable[string, NimNode]()
   
   var version: NimNode = newLit "330 core"
   var origBody = body
@@ -315,99 +315,188 @@ macro makeShader*(ctx: DrawContext, body: untyped): auto =
   if body.kind != nnkStmtList:
     body = newStmtList(body)
 
-  proc findUniforms(uniforms: var Table[string, NimNode], params: seq[NimNode]) =
-    for x in params:
-      x.expectKind nnkIdentDefs
-      var names = x[0..^3].mapit($it)
-      case x[^2]
-      of BracketExpr[Ident(strVal: "Uniform"), @t]:
-        for name in names:
-          uniforms[name] = t
+  proc isUniformType(n: NimNode, uniformType: var NimNode): bool =
+    if n.kind == nnkBracketExpr and n.len == 2 and n[0].eqIdent("Uniform"):
+      uniformType = n[1]
+      return true
+    false
 
-  result = buildAst(stmtList):
-    for x in body:
-      case x
-      of Pragma[ExprColonExpr[Ident(strVal: "version"), @ver]]:
-        if defined(windows) and "es" in ver.strVal:
-          warning("ignoring OpenGL ES shader version on windows, since OpenGL ES is not supported there")
+  proc getProcNameIdent(n: NimNode): NimNode =
+    var nameNode = n[0]
+    if nameNode.kind == nnkPostfix and nameNode.len == 2 and nameNode[0].eqIdent("*"):
+      nameNode = nameNode[1]
+    if nameNode.kind == nnkAccQuoted and nameNode.len > 0:
+      nameNode = nameNode[0]
+    nameNode
+
+  proc findFormalParams(n: NimNode): NimNode =
+    for child in n:
+      if child.kind == nnkFormalParams:
+        return child
+    newEmptyNode()
+
+  proc collectUniforms(uniforms: var Table[string, NimNode], params: NimNode) =
+    for param in params:
+      if param.kind != nnkIdentDefs:
+        continue
+      var uniformType: NimNode
+      if isUniformType(param[^2], uniformType):
+        for i in 0 ..< param.len - 2:
+          if param[i].kind in {nnkIdent, nnkSym}:
+            uniforms[param[i].strVal] = uniformType
+
+  proc handleVersionPragma(n: NimNode, versionNode: var NimNode): bool =
+    if n.kind != nnkPragma or n.len != 1:
+      return false
+    let item = n[0]
+    if item.kind == nnkExprColonExpr and item[0].eqIdent("version"):
+      versionNode = item[1]
+      return true
+    false
+
+  var outStmts = newStmtList()
+  for stmt in body:
+    if handleVersionPragma(stmt, version):
+      if defined(windows):
+        let versionStr = if version.kind in {nnkStrLit, nnkTripleStrLit, nnkRStrLit}:
+          version.strVal
         else:
-          version = ver
-      of ProcDef[@name is Ident(strVal: "vert"), _, _, FormalParams[Empty(), all @params], .._]:
-        x
-        vert = name
-        (uniforms.findUniforms(params))
-      of ProcDef[@name is Ident(strVal: "frag"), _, _, FormalParams[Empty(), all @params], .._]:
-        x
-        frag = name
-        (uniforms.findUniforms(params))
-      else: x
+          ""
+        if "es" in versionStr:
+          warning("ignoring OpenGL ES shader version on windows, since OpenGL ES is not supported there")
+    elif stmt.kind == nnkProcDef:
+      let params = findFormalParams(stmt)
+      let nameIdent = getProcNameIdent(stmt)
+      if nameIdent.kind in {nnkIdent, nnkSym} and nameIdent.strVal == "vert":
+        outStmts.add(stmt)
+        vert = nameIdent
+        collectUniforms(uniforms, params)
+      elif nameIdent.kind in {nnkIdent, nnkSym} and nameIdent.strVal == "frag":
+        outStmts.add(stmt)
+        frag = nameIdent
+        collectUniforms(uniforms, params)
+      else:
+        outStmts.add(stmt)
+    else:
+      outStmts.add(stmt)
 
-    if vert == nil:
-      (error("vert shader proc not defined", origBody))
-    if frag == nil:
-      (error("frag shader proc not defined", origBody))
-    
-    let shaderT = genSym(nskType)
+  if vert == nil:
+    error("vert shader proc not defined", origBody)
+  if frag == nil:
+    error("frag shader proc not defined", origBody)
 
-    typeSection:
-      typeDef:
-        shaderT
-        empty()
-        refTy:
-          objectTy:
-            empty()
-            ofInherit:
-              bindSym"RootObj"
-            recList:
-              identDefs(ident "shader"):
-                bindSym"Shader"
-                empty()
+  let shaderT = genSym(nskType)
+  let shaderX = genSym(nskLet)
 
-              for n, t in uniforms:
-                identDefs(ident n):
-                  bracketExpr bindSym"OpenglUniform": t
-                  empty()
-    
-    ifExpr:
-      elifBranch:
-        call bindSym"not":
-          call bindSym"hasKey":
-            dotExpr(ctx, ident "shaders")
-            newLit id
-        stmtList:
-          let shaderX = genSym(nskLet)
-          letSection:
-            identDefs(shaderX, empty(), call(bindSym"new", shaderT))
-          
-          asgn dotExpr(shaderX, ident"shader"):
-            call bindSym"newShader":
-              tableConstr:
-                exprColonExpr:
-                  ident "GlVertexShader"
-                  call bindSym"toGLSL":
-                    vert
-                    version
-                exprColonExpr:
-                  ident "GlFragmentShader"
-                  call bindSym"toGLSL":
-                    frag
-                    version
-          
-          for n, t in uniforms:
-            asgn dotExpr(shaderX, ident n):
-              call bracketExpr(bindSym"OpenglUniform", t):
-                bracketExpr:
-                  dotExpr(shaderX, ident "shader")
-                  newLit n
-          
-          call bindSym"[]=":
-            dotExpr(ctx, ident "shaders")
-            newLit id
-            call bindSym"RootRef": shaderX
-    
-    call shaderT: call(bindSym"[]", dotExpr(ctx, ident "shaders"), newLit id)
-  
-  result = nnkBlockStmt.newTree(newEmptyNode(), result)
+  var recList = nnkRecList.newTree(
+    nnkIdentDefs.newTree(
+      ident("shader"),
+      bindSym("Shader"),
+      newEmptyNode()
+    )
+  )
+  for n, t in uniforms:
+    recList.add(
+      nnkIdentDefs.newTree(
+        ident(n),
+        nnkBracketExpr.newTree(bindSym("OpenglUniform"), t),
+        newEmptyNode()
+      )
+    )
+
+  let typeSection = nnkTypeSection.newTree(
+    nnkTypeDef.newTree(
+      shaderT,
+      newEmptyNode(),
+      nnkRefTy.newTree(
+        nnkObjectTy.newTree(
+          newEmptyNode(),
+          nnkOfInherit.newTree(bindSym("RootObj")),
+          recList
+        )
+      )
+    )
+  )
+
+  let shaderTable = nnkTableConstr.newTree(
+    nnkExprColonExpr.newTree(
+      ident("GlVertexShader"),
+      nnkCall.newTree(bindSym("toGLSL"), vert, version)
+    ),
+    nnkExprColonExpr.newTree(
+      ident("GlFragmentShader"),
+      nnkCall.newTree(bindSym("toGLSL"), frag, version)
+    )
+  )
+
+  var shaderInit = newStmtList(
+    nnkLetSection.newTree(
+      nnkIdentDefs.newTree(
+        shaderX,
+        newEmptyNode(),
+        nnkCall.newTree(bindSym("new"), shaderT)
+      )
+    ),
+    nnkAsgn.newTree(
+      nnkDotExpr.newTree(shaderX, ident("shader")),
+      nnkCall.newTree(bindSym("newShader"), shaderTable)
+    )
+  )
+
+  for n, t in uniforms:
+    shaderInit.add(
+      nnkAsgn.newTree(
+        nnkDotExpr.newTree(shaderX, ident(n)),
+        nnkCall.newTree(
+          nnkBracketExpr.newTree(bindSym("OpenglUniform"), t),
+          nnkBracketExpr.newTree(
+            nnkDotExpr.newTree(shaderX, ident("shader")),
+            newLit(n)
+          )
+        )
+      )
+    )
+
+  shaderInit.add(
+    nnkCall.newTree(
+      bindSym("[]="),
+      nnkDotExpr.newTree(ctx, ident("shaders")),
+      newLit(id),
+      nnkCall.newTree(bindSym("RootRef"), shaderX)
+    )
+  )
+
+  let ifStmt = nnkIfStmt.newTree(
+    nnkElifBranch.newTree(
+      nnkCall.newTree(
+        bindSym("not"),
+        nnkCall.newTree(
+          bindSym("hasKey"),
+          nnkDotExpr.newTree(ctx, ident("shaders")),
+          newLit(id)
+        )
+      ),
+      shaderInit
+    )
+  )
+
+  let resultExpr = nnkCall.newTree(
+    shaderT,
+    nnkCall.newTree(
+      bindSym("[]"),
+      nnkDotExpr.newTree(ctx, ident("shaders")),
+      newLit(id)
+    )
+  )
+
+  var blockStmts = newStmtList()
+  for stmt in outStmts:
+    blockStmts.add(stmt)
+  blockStmts.add(typeSection)
+  blockStmts.add(ifStmt)
+  blockStmts.add(resultExpr)
+
+  result = nnkBlockStmt.newTree(newEmptyNode(), blockStmts)
 
 
 proc newDrawContext*: DrawContext =

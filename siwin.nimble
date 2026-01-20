@@ -18,11 +18,13 @@ feature "opengl":
   requires "opengl"
   requires "nimgl"
   requires "pixie"
+  requires "shady"
 
 feature "test":
   requires "opengl"
   requires "nimgl"
   requires "pixie"
+  requires "shady"
 
 feature "android":
   requires "https://github.com/levovix0/dali"
