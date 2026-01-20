@@ -41,6 +41,8 @@ when defined(windows):
 when defined(android):
   requires "jnim >= 0.5.2"
   requires "https://github.com/yglukhov/android"
+  requires "https://github.com/levovix0/dali"
+  requires "https://github.com/levovix0/marco@0.1.2"
 
 
 
