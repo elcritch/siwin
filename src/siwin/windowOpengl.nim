@@ -46,7 +46,21 @@ when not siwin_use_lib:
         resizable, fullscreen, frameless, transparent, vsync
       )
 
-    elif defined(linux) or defined(bsd) or defined(feature.siwin.x11) or defined(feature.siwin.wayland):
+    elif defined(windows):
+      newOpenglWindowWinapi(
+        size, title,
+        (if screen == -1: defaultScreenWinapi() else: screenWinapi(screen)),
+        resizable, fullscreen, frameless, transparent, vsync
+      )
+
+    elif defined(macosx):
+      newOpenglWindowCocoa(
+        size, title,
+        (if screen == -1: defaultScreenCocoa() else: screenCocoa(screen)),
+        resizable, fullscreen, frameless, transparent, vsync
+      )
+
+    elif siwin_unix_desktop:
       if globals of SiwinGlobalsX11:
         result = globals.SiwinGlobalsX11.newOpenglWindowX11(
           size, title,
@@ -62,21 +76,6 @@ when not siwin_use_lib:
         )
       else:
         raise SiwinPlatformSupportDefect.newException("Unsupported platform")
-
-    elif defined(windows):
-      newOpenglWindowWinapi(
-        size, title,
-        (if screen == -1: defaultScreenWinapi() else: screenWinapi(screen)),
-        resizable, fullscreen, frameless, transparent, vsync
-      )
-
-    elif defined(macosx):
-      newOpenglWindowCocoa(
-        size, title,
-        (if screen == -1: defaultScreenCocoa() else: screenCocoa(screen)),
-        resizable, fullscreen, frameless, transparent, vsync
-      )
-
 
 
 proc siwin_new_opengl_window(

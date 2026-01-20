@@ -15,7 +15,9 @@ when not siwin_use_lib:
   ): Window =
     when defined(android):
       newOpenglWindowAndroid()
-    elif defined(linux) or defined(bsd) or defined(feature.siwin.x11) or defined(feature.siwin.wayland):
+    elif defined(windows):
+      newOpenglContextWinapi()
+    elif siwin_unix_desktop:
       if globals of SiwinGlobalsX11:
         globals.SiwinGlobalsX11.newOpenglContextX11()
       elif globals of SiwinGlobalsWayland:
@@ -23,10 +25,6 @@ when not siwin_use_lib:
       #   newOpenglContextWayland()
       else:
         raise ValueError.newException("Unsupported platform")
-
-    elif defined(windows):
-      newOpenglContextWinapi()
-
 
 proc siwin_new_opengl_context(globals: SiwinGlobals): Window {.siwin_import_export.} =
   newOpenglContext(globals)

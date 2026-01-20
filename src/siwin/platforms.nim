@@ -39,7 +39,7 @@ when not siwin_use_lib:
     elif defined(android):
       @[Platform.android]
     
-    elif defined(linux) or defined(bsd) or defined(feature.siwin.x11) or defined(feature.siwin.wayland):
+    elif siwin_unix_desktop:
       if isWaylandAvailable():
         @[Platform.wayland, Platform.x11]
         # x11 is available on wayland compositors through XWayland

@@ -8,7 +8,13 @@ when not siwin_use_lib:
   when defined(android):
     import ./platforms/android/window as androidWindow
 
-  elif defined(linux) or defined(bsd) or defined(feature.siwin.x11) or defined(feature.siwin.wayland):
+  elif defined(windows):
+    import ./platforms/winapi/window as winapiWindow
+
+  elif defined(macosx):
+    import ./platforms/cocoa/window as cocoaWindow
+
+  elif siwin_unix_desktop:
     import ./platforms
     
     import ./platforms/x11/siwinGlobals as x11SiwinGlobals
@@ -16,27 +22,22 @@ when not siwin_use_lib:
     import ./platforms/wayland/siwinGlobals as waylandSiwinGlobals
     import ./platforms/wayland/window as waylandWindow
 
-  elif defined(windows):
-    import ./platforms/winapi/window as winapiWindow
-
-  elif defined(macosx):
-    import ./platforms/cocoa/window as cocoaWindow
-
 
 when not siwin_use_lib:
   proc screenCount*(globals: SiwinGlobals): int32 =
     when defined(android):
       1
 
-    elif defined(linux) or defined(bsd) or defined(feature.siwin.x11) or defined(feature.siwin.wayland):
+    elif defined(windows):
+      screenCountWinapi()
+
+    elif siwin_unix_desktop:
       if globals of SiwinGlobalsX11:
         result = globals.SiwinGlobalsX11.screenCountX11()
       elif globals of SiwinGlobalsWayland:
         result = globals.SiwinGlobalsWayland.screenCountWayland()
       else:
         raise SiwinPlatformSupportDefect.newException("Unsupported platform")
-    
-    elif defined(windows): screenCountWinapi()
 
   proc screen*(globals: SiwinGlobals, number: int32): Screen =
     when defined(android):
