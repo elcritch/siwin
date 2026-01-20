@@ -6,7 +6,7 @@ when not siwin_use_lib:
   when defined(android):
     import ./platforms/android/window as androidWindow
 
-  elif defined(linux):
+  elif defined(linux) or defined(bsd):
     import ./platforms
     
     import ./platforms/x11/siwinGlobals as x11SiwinGlobals
@@ -47,7 +47,7 @@ when not siwin_use_lib:
         resizable, fullscreen, frameless, transparent, vsync
       )
 
-    elif defined(linux):
+    elif defined(linux) or defined(bsd):
       if globals of SiwinGlobalsX11:
         result = globals.SiwinGlobalsX11.newOpenglWindowX11(
           size, title,

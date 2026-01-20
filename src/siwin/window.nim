@@ -8,7 +8,7 @@ when not siwin_use_lib:
   when defined(android):
     import ./platforms/android/window as androidWindow
 
-  elif defined(linux):
+  elif defined(linux) or defined(bsd):
     import ./platforms
     
     import ./platforms/x11/siwinGlobals as x11SiwinGlobals
@@ -28,7 +28,7 @@ when not siwin_use_lib:
     when defined(android):
       1
 
-    elif defined(linux):
+    elif defined(linux) or defined(bsd):
       if globals of SiwinGlobalsX11:
         result = globals.SiwinGlobalsX11.screenCountX11()
       elif globals of SiwinGlobalsWayland:
@@ -42,7 +42,7 @@ when not siwin_use_lib:
     when defined(android):
       Screen()
 
-    elif defined(linux):
+    elif defined(linux) or defined(bsd):
       if globals of SiwinGlobalsX11:
         result = globals.SiwinGlobalsX11.screenX11(number)
       elif globals of SiwinGlobalsWayland:
@@ -56,7 +56,7 @@ when not siwin_use_lib:
     when defined(android):
       Screen()
 
-    elif defined(linux):
+    elif defined(linux) or defined(bsd):
       if globals of SiwinGlobalsX11:
         result = globals.SiwinGlobalsX11.defaultScreenX11()
       elif globals of SiwinGlobalsWayland:
@@ -86,7 +86,7 @@ when not siwin_use_lib:
         resizable, fullscreen, frameless, transparent
       )
 
-    elif defined(linux):
+    elif defined(linux) or defined(bsd):
       if globals of SiwinGlobalsX11:
         result = globals.SiwinGlobalsX11.newSoftwareRenderingWindowX11(
           size, title,

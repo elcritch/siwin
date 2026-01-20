@@ -10,7 +10,25 @@ requires "vmath >= 1.1.4"
 
 # note: require platform dependencies only if it is the platform on which userprogrammer works.
 #       ask a userprogrammer to install specific platform dependencies if cross compiling.
-when defined(linux):
+
+feature "x11":
+  requires "x11 >= 1.1"
+
+feature "opengl":
+  requires "opengl"
+  requires "nimgl"
+  requires "pixie"
+
+feature "test":
+  requires "opengl"
+  requires "nimgl"
+  requires "pixie"
+
+feature "android":
+  requires "https://github.com/levovix0/dali"
+  requires "https://github.com/levovix0/marco@0.1.2"
+
+when defined(linux) or defined(bsd):
   requires "x11 >= 1.1"
 
 when defined(windows):

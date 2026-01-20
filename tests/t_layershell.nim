@@ -1,4 +1,4 @@
-when not defined(linux):
+when not defined(linux) and not defined(bsd):
   {.error: "wlr-layer-shell only works on Wayland (Linux)".}
 
 import std/[unittest]
