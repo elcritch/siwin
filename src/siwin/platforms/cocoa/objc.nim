@@ -19,7 +19,7 @@ type
 proc objc_msgSend_c*() {.importc: "objc_msgSend".}
 proc objc_msgSendSuper_c*() {.importc: "objc_msgSendSuper".}
 
-when defined(amd64) or defined(arm64):
+when defined(amd64):
   proc objc_msgSend_fpret_c*() {.importc: "objc_msgSend_fpret".}
   proc objc_msgSend_stret_c*() {.importc: "objc_msgSend_stret".}
 else:
