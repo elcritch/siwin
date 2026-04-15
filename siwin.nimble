@@ -12,8 +12,6 @@ requires "vmath >= 1.1.4"
 #       ask a userprogrammer to install specific platform dependencies if cross compiling.
 when defined(linux) or defined(bsd):
   requires "x11 >= 1.1"
-  requires "https://github.com/planetis-m/vulkan#b223dc9"
-  #requires "https://github.com/DanielBelmes/vulkan"
 
 when defined(windows):
   requires "winim >= 3.6"
@@ -23,14 +21,14 @@ when defined(android):
   requires "https://github.com/yglukhov/android"
 
 when defined(macosx):
-  requires "darwin >= 0.2.2"
+  requires "darwin >= 0.2.4"
 
 feature "dev":
   requires "opengl"
   requires "nimgl"
   requires "pixie"
   requires "sdl2"
-
+  requires "https://github.com/planetis-m/vulkan#b223dc9"
 
 
 when fileExists("src/siwin/build_utils/tasks.nim"):
