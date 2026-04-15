@@ -21,7 +21,11 @@ when defined(android):
   requires "https://github.com/yglukhov/android"
 
 when defined(macosx):
+<<<<<<< HEAD
   requires "darwin >= 0.2.4"
+=======
+  requires "darwin >= 0.2.3"
+>>>>>>> fork/fix-change-to-method
 
 feature "dev":
   requires "opengl"
