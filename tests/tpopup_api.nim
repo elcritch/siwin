@@ -39,6 +39,7 @@ type PopupProbeResult = object
   relPos: IVec2
   reportedSize: IVec2
   uiScale: float32
+  configured: bool
 
 proc maxAbsComponent(v: IVec2): int32 =
   max(abs(v.x), abs(v.y))
@@ -67,6 +68,8 @@ proc parsePopupProbeResult(output: string): PopupProbeResult =
         result.reportedSize = parseIvec2(kv[1])
       of "uiScale":
         result.uiScale = parseFloat(kv[1]).float32
+      of "configured":
+        result.configured = parseBool(kv[1])
       else:
         discard
 
@@ -111,6 +114,12 @@ proc runPopupProbe(platform: Platform) =
 
   let placement = popupProbePlacement()
   let popup = globals.newPopupWindow(parent, placement, grab = true)
+  var popupConfigured = false
+  popup.eventsHandler = WindowEventsHandler(
+    onResize: proc(e: ResizeEvent) =
+      if not e.initial:
+        popupConfigured = true
+  )
   popup.firstStep(makeVisible = true)
 
   var
@@ -131,24 +140,23 @@ proc runPopupProbe(platform: Platform) =
       lastRelPos = relPos
       lastReportedSize = reportedSize
 
-    if stableSteps >= 8:
+    if stableSteps >= 8 and (platform != Platform.wayland or popupConfigured):
       break
 
   echo "POPUP_RESULT platform=", $platform, " relPos=", lastRelPos.x, ",", lastRelPos.y,
     " reportedSize=", lastReportedSize.x, ",", lastReportedSize.y,
-    " uiScale=", popup.uiScale
+    " uiScale=", popup.uiScale,
+    " configured=", popupConfigured
 
   close popup
   close parent
   quit(0)
 
-proc runPopupProbeSubprocess(platform: Platform; waylandDebug = false): tuple[output: string, exitCode: int] =
+proc runPopupProbeSubprocess(platform: Platform): tuple[output: string, exitCode: int] =
   var env = newStringTable()
   for key, value in envPairs():
     env[key] = value
   env["SIWIN_POPUP_TEST_HELPER"] = $platform
-  if waylandDebug:
-    env["WAYLAND_DEBUG"] = "1"
   execCmdEx(getAppFilename().quoteShell & " --popup-runtime-helper", env = env)
 
 when defined(linux) or defined(bsd):
@@ -246,16 +254,15 @@ suite "siwin popup api":
       if Platform.wayland notin availablePlatforms() or Platform.x11 notin availablePlatforms():
         skip()
 
-      let wayland = runPopupProbeSubprocess(Platform.wayland, waylandDebug = true)
+      let wayland = runPopupProbeSubprocess(Platform.wayland)
       require wayland.exitCode == 0
-      check "xdg_popup" in wayland.output
-      check "configure(" in wayland.output
 
       let x11 = runPopupProbeSubprocess(Platform.x11)
       require x11.exitCode == 0
 
       let waylandResult = parsePopupProbeResult(wayland.output)
       let x11Result = parsePopupProbeResult(x11.output)
+      check waylandResult.configured
       check maxAbsComponent(waylandResult.relPos - x11Result.relPos) <= 1
       check maxAbsComponent(waylandResult.reportedSize - x11Result.reportedSize) <= 1
 
