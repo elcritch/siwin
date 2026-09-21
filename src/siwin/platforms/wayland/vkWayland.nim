@@ -1,5 +1,10 @@
 import std/dynlib
 
+when sizeof(pointer) == 8:
+  type VkSurfaceHandle* = pointer
+else:
+  type VkSurfaceHandle* = uint64
+
 const vkDLL =
   when defined(windows):
     "vulkan-1.dll"
@@ -53,11 +58,11 @@ type
     instance: pointer,
     pCreateInfo: ptr VkWaylandSurfaceCreateInfoKHR,
     pAllocator: pointer,
-    pSurface: ptr uint64,
+    pSurface: ptr VkSurfaceHandle,
   ): VkResult {.cdecl.}
 
   VkDestroySurfaceProc =
-    proc(instance: pointer, surface: uint64, pAllocator: pointer) {.cdecl.}
+    proc(instance: pointer, surface: VkSurfaceHandle, pAllocator: pointer) {.cdecl.}
 
 let
   vkCreateWaylandSurfaceKHR* = cast[VkCreateWaylandSurfaceProc](if libVulkanHandle == nil:

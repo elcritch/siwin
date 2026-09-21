@@ -490,7 +490,7 @@ when siwin_build_lib:
     except:
       return 1.cchar
 
-  proc siwin_window_vulkan_surface(window: Window): uint64 =
+  proc siwin_window_vulkan_surface(window: Window): VulkanSurface =
     window.vulkanSurface
 
   proc siwin_window_clipboard(window: Window): Clipboard =

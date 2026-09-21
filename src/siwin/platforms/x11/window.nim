@@ -96,9 +96,9 @@ type
     width: int16
     height: int16
 
-  XineramaIsActiveProc = proc(dpy: PDisplay): XBool {.cdecl.}
+  XineramaIsActiveProc = proc(dpy: PDisplay): XBool {.cdecl, raises: [].}
   XineramaQueryScreensProc =
-    proc(dpy: PDisplay, number: Pcint): PXineramaScreenInfo {.cdecl.}
+    proc(dpy: PDisplay, number: Pcint): PXineramaScreenInfo {.cdecl, raises: [].}
 
 var
   xineramaLib: LibHandle
@@ -134,13 +134,18 @@ proc xineramaAvailable(): bool =
   xineramaIsActiveProc != nil and xineramaQueryScreensProc != nil
 
 type
-  XSyncQueryExtensionProc = proc(d: ptr Display, vEv, vEr: ptr cint): XBool {.cdecl.}
-  XSyncInitializeProc = proc(d: ptr Display, verMaj, verMin: ptr cint): cint {.cdecl.}
-  XSyncCreateCounterProc = proc(d: ptr Display, v: XSyncValue): XSyncCounter {.cdecl.}
-  XSyncDestroyCounterProc = proc(d: ptr Display, c: XSyncCounter) {.cdecl.}
-  XSyncSetCounterProc = proc(d: ptr Display, c: XSyncCounter, v: XSyncValue) {.cdecl.}
+  XSyncQueryExtensionProc =
+    proc(d: ptr Display, vEv, vEr: ptr cint): XBool {.cdecl, raises: [].}
+  XSyncInitializeProc =
+    proc(d: ptr Display, verMaj, verMin: ptr cint): cint {.cdecl, raises: [].}
+  XSyncCreateCounterProc =
+    proc(d: ptr Display, v: XSyncValue): XSyncCounter {.cdecl, raises: [].}
+  XSyncDestroyCounterProc =
+    proc(d: ptr Display, c: XSyncCounter): cint {.cdecl, raises: [].}
+  XSyncSetCounterProc =
+    proc(d: ptr Display, c: XSyncCounter, v: XSyncValue): cint {.cdecl, raises: [].}
   XcursorImageLoadCursorProc =
-    proc(d: ptr Display, image: ptr CursorImage): x.Cursor {.cdecl.}
+    proc(d: ptr Display, image: ptr CursorImage): x.Cursor {.cdecl, raises: [].}
 
 let
   XSyncQueryExtension =
@@ -471,7 +476,7 @@ proc `=destroy`(window: WindowX11Obj) {.siwin_destructor.} =
 
   if window.xSyncCounter.int != 0:
     if XSyncDestroyCounter != nil:
-      window.globals.display.XSyncDestroyCounter(window.xSyncCounter)
+      discard window.globals.display.XSyncDestroyCounter(window.xSyncCounter)
 
 proc `=trace`(x: var WindowX11SoftwareRenderingObj, env: pointer) =
   #? for some reason, without this, nim produces invalid C code for =trace implementation
@@ -1901,7 +1906,8 @@ method serviceWindow*(window: WindowX11) =
 
     if window.syncState == SyncState.syncAndConfigureRecieved:
       if XSyncSetCounter != nil:
-        window.globals.display.XSyncSetCounter(window.xSyncCounter, window.lastSync)
+        discard
+          window.globals.display.XSyncSetCounter(window.xSyncCounter, window.lastSync)
       window.syncState = SyncState.none
 
     window.endSwapBuffers()

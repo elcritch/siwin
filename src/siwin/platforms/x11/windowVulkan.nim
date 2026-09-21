@@ -11,14 +11,14 @@ privateAccess WindowX11
 type
   Surface = object
     instance: pointer
-    raw: uint64
+    raw: VkSurfaceHandle
 
   WindowX11Vulkan* = ref WindowX11VulkanObj
   WindowX11VulkanObj* = object of WindowX11
     surface: Surface
 
 proc `=destroy`*(surface: Surface) {.siwin_destructor.} =
-  if surface.instance != nil and surface.raw != 0:
+  if surface.instance != nil and cast[uint64](surface.raw) != 0:
     # vkDestroySurfaceKHR(surface.instance, surface.raw, nil)  #? causes crash
     discard
 
@@ -31,8 +31,8 @@ proc `=destroy`(x: WindowX11VulkanObj) {.siwin_destructor.} =
   `=destroy`(cast[ptr WindowX11Obj](x.addr)[])
   `=destroy`(x.surface)
 
-method vulkanSurface*(window: WindowX11Vulkan): uint64 =
-  window.surface.raw
+method vulkanSurface*(window: WindowX11Vulkan): anyWindow.VulkanSurface =
+  cast[anyWindow.VulkanSurface](window.surface.raw)
 
 proc initVulkanWindow(
     window: WindowX11Vulkan,
