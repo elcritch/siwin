@@ -1,13 +1,17 @@
+import std/dynlib
 
 const vkDLL =
-  when defined(windows): "vulkan-1.dll"
-  elif defined(macosx): "libMoltenVK.dylib"
-  else: "libvulkan.so.1"
+  when defined(windows):
+    "vulkan-1.dll"
+  elif defined(macosx):
+    "libMoltenVK.dylib"
+  else:
+    "libvulkan.so.1"
 
 type
   VkStructureType* {.size: int32.sizeof.} = enum
     VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR = 1000006000
-  
+
   VkResult* {.size: int32.sizeof.} = enum
     VK_ERROR_FRAGMENTED_POOL = -12
     VK_ERROR_FORMAT_NOT_SUPPORTED = -11
@@ -27,7 +31,7 @@ type
     VK_EVENT_SET = 3
     VK_EVENT_RESET = 4
     VK_INCOMPLETE = 5
-  
+
   VkWaylandSurfaceCreateInfoKHR* = object
     sType*: VkStructureType
     pNext*: pointer
@@ -35,15 +39,37 @@ type
     display*: pointer
     surface*: pointer
 
+proc loadFirst(names: openArray[string]): LibHandle =
+  for name in names:
+    result = loadLib(name)
+    if result != nil:
+      return
 
-{.push, cdecl, stdcall, dynlib: vkDLL, importc.}
+let libVulkanHandle =
+  loadFirst([vkDLL, when defined(linux) or defined(bsd): "libvulkan.so" else: vkDLL])
 
-proc vkCreateWaylandSurfaceKHR*(
-  instance: pointer,
-  pCreateInfo: ptr VkWaylandSurfaceCreateInfoKHR,
-  pAllocator: pointer,
-  pSurface: ptr pointer): VkResult
+type
+  VkCreateWaylandSurfaceProc = proc(
+    instance: pointer,
+    pCreateInfo: ptr VkWaylandSurfaceCreateInfoKHR,
+    pAllocator: pointer,
+    pSurface: ptr uint64,
+  ): VkResult {.cdecl.}
 
-proc vkDestroySurfaceKHR*(instance: pointer, surface: pointer, pAllocator: pointer)
+  VkDestroySurfaceProc =
+    proc(instance: pointer, surface: uint64, pAllocator: pointer) {.cdecl.}
 
-{.pop.}
+let
+  vkCreateWaylandSurfaceKHR* = cast[VkCreateWaylandSurfaceProc](if libVulkanHandle == nil:
+    nil
+  else:
+    symAddr(libVulkanHandle, "vkCreateWaylandSurfaceKHR"))
+  vkDestroySurfaceKHR* = cast[VkDestroySurfaceProc](if libVulkanHandle == nil:
+    nil
+  else:
+    symAddr(libVulkanHandle, "vkDestroySurfaceKHR"))
+
+proc requireVulkanWayland*() =
+  if libVulkanHandle == nil or vkCreateWaylandSurfaceKHR == nil:
+    raise
+      OSError.newException("Vulkan loader or Wayland surface support is not available")

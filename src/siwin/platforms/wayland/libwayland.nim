@@ -1,8 +1,6 @@
 import std/[dynlib]
 import ../../[siwindefs]
 
-{.pragma: importwayland, cdecl, dynlib: "libwayland-client.so(|.0)".}
-
 type
   Wl_display* = object
     raw*: pointer
@@ -16,7 +14,7 @@ type
     ## note: Wl_proxy here is like wl_proxy* in c
     ## wrapping pointer to an object is needed to attach destructor
     raw*: ptr Wl_object
-  
+
   Wl_interface* = object
     name*: cstring
     version*: int32
@@ -56,90 +54,200 @@ type
       ## * `h`: fd
       ## * `?`: following argument (`o` or `s`) is nullable
     types*: ptr UncheckedArray[ptr Wl_interface]
-  
+
   WaylandProtocolError* = object of CatchableError
 
   RoundtripFailed* = object of WaylandProtocolError
 
   Wl_dispatcher_proc* = proc(
-      impl: pointer, obj: pointer, opcode: uint32, msg: ptr WlMessage, args: pointer
-    ): int32 {.cdecl.}
-  
-  Wl_array* = ptr object
-    size*: int
-    alloc*: int
-    data*: pointer
-  
+    impl: pointer, obj: pointer, opcode: uint32, msg: ptr WlMessage, args: pointer
+  ): int32 {.cdecl.}
+
+  Wl_array* =
+    ptr object
+      size*: int
+      alloc*: int
+      data*: pointer
+
   WlProxyTyped* = concept x
     x.proxy is Wl_proxy
-  
+
   Wl_argument* = int
 
+let proxyNimTag: cstring =
+  "nim-side proxy (userdata is ref RootObj and it requires destruction)"
 
-let
-  proxyNimTag: cstring = "nim-side proxy (userdata is ref RootObj and it requires destruction)"
-
-var
-  libwaylandclientHandle = loadLib("libwayland-client.so")
+var libwaylandclientHandle = loadLib("libwayland-client.so")
 
 if libwaylandclientHandle == nil:
   libwaylandclientHandle = loadLib("libwayland-client.so.0")
 
+type
+  WlDisplayDisconnectProc = proc(this: pointer) {.cdecl.}
+  WlDisplayConnectProc = proc(name: cstring): pointer {.cdecl.}
+  WlDisplayConnectToFdProc = proc(fd: FileHandle): pointer {.cdecl.}
+  WlDisplayGetFdProc = proc(this: pointer): FileHandle {.cdecl.}
+  WlDisplayFlushProc = proc(this: pointer): int32 {.cdecl.}
+  WlDisplayPrepareReadProc = proc(this: pointer): int32 {.cdecl.}
+  WlDisplayReadEventsProc = proc(this: pointer): int32 {.cdecl.}
+  WlDisplayCancelReadProc = proc(this: pointer) {.cdecl.}
+  WlDisplayRoundtripProc = proc(this: pointer): int32 {.cdecl.}
+  WlProxySetUserDataProc = proc(this: pointer, v: pointer) {.cdecl.}
+  WlProxyGetUserDataProc = proc(this: pointer): pointer {.cdecl.}
+  WlProxySetTagProc = proc(this: pointer, v: ptr cstring) {.cdecl.}
+  WlProxyGetTagProc = proc(this: pointer): ptr cstring {.cdecl.}
+  WlProxyDestroyProc = proc(this: pointer) {.cdecl.}
+  WlProxyGetVersionProc = proc(this: pointer): uint32 {.cdecl.}
+  WlProxyGetIdProc = proc(this: pointer): uint32 {.cdecl.}
+  WlProxyMarshalArrayFlagsProc = proc(
+    proxy: pointer,
+    opcode: uint32,
+    iface: ptr Wl_interface,
+    version: uint32,
+    flags: uint32,
+    args: pointer,
+  ): pointer {.cdecl.}
+  WlProxyMarshalFlagsProc = proc(
+    proxy: pointer,
+    opcode: uint32,
+    iface: ptr Wl_interface,
+    version: uint32,
+    flags: uint32,
+  ): pointer {.cdecl, varargs.}
+  WlDisplayDispatchPendingProc = proc(this: pointer): int32 {.cdecl.}
+  WlProxyAddDispatcherProc = proc(
+    proxy: pointer, callback: Wl_dispatcher_proc, impl: pointer, proxyUserdata: pointer
+  ): int32 {.cdecl.}
 
-siwin_loadDynlibIfExists libwaylandclientHandle:
-  proc wl_display_disconnect*(this: Wl_display)
+proc loadProc[T](handle: LibHandle, name: string): T =
+  if handle != nil:
+    result = cast[T](symAddr(handle, name))
 
-  proc wl_display_connect*(name: cstring): Wl_display
-  proc wl_display_connect_to_fd*(fd: FileHandle): Wl_display
+let
+  wl_display_disconnect_c =
+    loadProc[WlDisplayDisconnectProc](libwaylandclientHandle, "wl_display_disconnect")
+  wl_display_connect_c =
+    loadProc[WlDisplayConnectProc](libwaylandclientHandle, "wl_display_connect")
+  wl_display_connect_to_fd_c = loadProc[WlDisplayConnectToFdProc](
+    libwaylandclientHandle, "wl_display_connect_to_fd"
+  )
+  wl_display_get_fd_c =
+    loadProc[WlDisplayGetFdProc](libwaylandclientHandle, "wl_display_get_fd")
+  wl_display_flush_c =
+    loadProc[WlDisplayFlushProc](libwaylandclientHandle, "wl_display_flush")
+  wl_display_prepare_read_c = loadProc[WlDisplayPrepareReadProc](
+    libwaylandclientHandle, "wl_display_prepare_read"
+  )
+  wl_display_read_events_c =
+    loadProc[WlDisplayReadEventsProc](libwaylandclientHandle, "wl_display_read_events")
+  wl_display_cancel_read_c =
+    loadProc[WlDisplayCancelReadProc](libwaylandclientHandle, "wl_display_cancel_read")
+  wl_display_roundtrip_c =
+    loadProc[WlDisplayRoundtripProc](libwaylandclientHandle, "wl_display_roundtrip")
+  wl_proxy_set_user_data_c =
+    loadProc[WlProxySetUserDataProc](libwaylandclientHandle, "wl_proxy_set_user_data")
+  wl_proxy_get_user_data_c =
+    loadProc[WlProxyGetUserDataProc](libwaylandclientHandle, "wl_proxy_get_user_data")
+  wl_proxy_set_tag_c =
+    loadProc[WlProxySetTagProc](libwaylandclientHandle, "wl_proxy_set_tag")
+  wl_proxy_get_tag_c =
+    loadProc[WlProxyGetTagProc](libwaylandclientHandle, "wl_proxy_get_tag")
+  wl_proxy_destroy_c =
+    loadProc[WlProxyDestroyProc](libwaylandclientHandle, "wl_proxy_destroy")
+  wl_proxy_get_version_c =
+    loadProc[WlProxyGetVersionProc](libwaylandclientHandle, "wl_proxy_get_version")
+  wl_proxy_get_id_c =
+    loadProc[WlProxyGetIdProc](libwaylandclientHandle, "wl_proxy_get_id")
+  wl_proxy_marshal_array_flags* = loadProc[WlProxyMarshalArrayFlagsProc](
+    libwaylandclientHandle, "wl_proxy_marshal_array_flags"
+  )
+  wl_proxy_marshal_flags* =
+    loadProc[WlProxyMarshalFlagsProc](libwaylandclientHandle, "wl_proxy_marshal_flags")
+  wl_display_dispatch_pending_c = loadProc[WlDisplayDispatchPendingProc](
+    libwaylandclientHandle, "wl_display_dispatch_pending"
+  )
+  wl_proxy_add_dispatcher_c = loadProc[WlProxyAddDispatcherProc](
+    libwaylandclientHandle, "wl_proxy_add_dispatcher"
+  )
 
-  proc wl_display_get_fd*(this: Wl_display): FileHandle
+proc wl_display_disconnect*(this: Wl_display) =
+  if this.raw != nil and wl_display_disconnect_c != nil:
+    wl_display_disconnect_c(this.raw)
 
-  proc wl_display_flush*(this: Wl_display): int32
-  proc wl_display_prepare_read*(this: Wl_display): int32
-  proc wl_display_read_events*(this: Wl_display): int32
-  proc wl_display_cancel_read*(this: Wl_display)
-  proc wl_display_roundtrip*(this: Wl_display): int32
+proc wl_display_connect*(name: cstring): Wl_display =
+  if wl_display_connect_c != nil:
+    result.raw = wl_display_connect_c(name)
 
+proc wl_display_connect_to_fd*(fd: FileHandle): Wl_display =
+  if wl_display_connect_to_fd_c != nil:
+    result.raw = wl_display_connect_to_fd_c(fd)
 
-  proc wl_proxy_set_user_data*(this: Wl_proxy, v: pointer)
-  proc wl_proxy_get_user_data*(this: Wl_proxy): pointer
+proc wl_display_get_fd*(this: Wl_display): FileHandle =
+  wl_display_get_fd_c(this.raw)
 
-  proc wl_proxy_set_tag*(this: Wl_proxy, v: ptr cstring)
-  proc wl_proxy_get_tag*(this: Wl_proxy): ptr cstring
+proc wl_display_flush*(this: Wl_display): int32 =
+  wl_display_flush_c(this.raw)
 
-  proc wl_proxy_destroy*(this: Wl_proxy)
+proc wl_display_prepare_read*(this: Wl_display): int32 =
+  wl_display_prepare_read_c(this.raw)
 
-  proc wl_proxy_get_version*(this: Wl_proxy): uint32
-  proc wl_proxy_get_id*(this: Wl_proxy): uint32
+proc wl_display_read_events*(this: Wl_display): int32 =
+  wl_display_read_events_c(this.raw)
 
-  proc wl_proxy_marshal_array_flags*(
-    proxy: pointer, opcode: uint32, iface: ptr Wl_interface, version: uint32, flags: uint32, args: pointer
-  ): pointer
+proc wl_display_cancel_read*(this: Wl_display) =
+  wl_display_cancel_read_c(this.raw)
 
-  proc wl_proxy_marshal_flags*(
-    proxy: pointer, opcode: uint32, iface: ptr Wl_interface, version: uint32, flags: uint32
-  ): pointer {.varargs.}
+proc wl_display_roundtrip*(this: Wl_display): int32 =
+  wl_display_roundtrip_c(this.raw)
 
-  proc wl_proxy_add_dispatcher*(
+proc wl_proxy_set_user_data*(this: Wl_proxy, v: pointer) =
+  wl_proxy_set_user_data_c(cast[pointer](this.raw), v)
+
+proc wl_proxy_get_user_data*(this: Wl_proxy): pointer =
+  wl_proxy_get_user_data_c(cast[pointer](this.raw))
+
+proc wl_proxy_set_tag*(this: Wl_proxy, v: ptr cstring) =
+  wl_proxy_set_tag_c(cast[pointer](this.raw), v)
+
+proc wl_proxy_get_tag*(this: Wl_proxy): ptr cstring =
+  wl_proxy_get_tag_c(cast[pointer](this.raw))
+
+proc wl_proxy_destroy*(this: Wl_proxy) =
+  wl_proxy_destroy_c(cast[pointer](this.raw))
+
+proc wl_proxy_get_version*(this: Wl_proxy): uint32 =
+  wl_proxy_get_version_c(cast[pointer](this.raw))
+
+proc wl_proxy_get_id*(this: Wl_proxy): uint32 =
+  wl_proxy_get_id_c(cast[pointer](this.raw))
+
+proc wl_display_dispatch_pending*(this: Wl_display): int32 =
+  wl_display_dispatch_pending_c(this.raw)
+
+proc wl_proxy_add_dispatcher*(
     proxy: Wl_proxy, callback: Wl_dispatcher_proc, impl: pointer, proxyUserdata: pointer
-  ): int32
-
+): int32 =
+  wl_proxy_add_dispatcher_c(cast[pointer](proxy.raw), callback, impl, proxyUserdata)
 
 proc `=destroy`*(this: Wl_display) {.siwin_destructor.} =
-  if this.raw != nil:
+  if this.raw != nil and wl_display_disconnect_c != nil:
     try:
       wl_display_disconnect this
     except:
       discard
 
 proc destroyCallbacks*(this: Wl_proxy) =
-  if this.raw == nil: return
+  if this.raw == nil:
+    return
   if this.wl_proxy_get_tag == proxyNimTag.addr:
-    cast[ptr tuple[a: pointer, f: proc(cb: pointer) {.cdecl, raises: [].}]](this.raw.impl)[].f(this.raw.impl)
+    cast[ptr tuple[a: pointer, f: proc(cb: pointer) {.cdecl, raises: [].}]](this.raw.impl)[].f(
+      this.raw.impl
+    )
     this.wl_proxy_set_tag nil
 
 proc destroy*(this: Wl_proxy) =
-  if this.raw == nil: return
+  if this.raw == nil:
+    return
   destroyCallbacks this
   wl_proxy_destroy this
 
@@ -150,43 +258,68 @@ proc destroy*(this: Wl_proxy) =
 # proc `=sink`*(this: var Wl_proxy, v: Wl_proxy) =
 #   this.raw = v.raw
 
-
 proc dispatchPending*(this: Wl_display): int32 =
-  proc impl(this: Wl_display): int32 {.importc: "wl_display_dispatch_pending", importwayland.}
-  result = impl(this)
+  if wl_display_dispatch_pending_c == nil:
+    raise OSError.newException("Wayland client library is not available")
+  result = wl_display_dispatch_pending(this)
   if result == -1:
     raise WaylandProtocolError.newException("failed to dispatch events")
+
+proc waylandClientAvailable*(): bool =
+  libwaylandclientHandle != nil and wl_display_disconnect_c != nil and
+    wl_display_connect_c != nil and wl_display_connect_to_fd_c != nil and
+    wl_display_get_fd_c != nil and wl_display_flush_c != nil and
+    wl_display_prepare_read_c != nil and wl_display_read_events_c != nil and
+    wl_display_cancel_read_c != nil and wl_display_roundtrip_c != nil and
+    wl_display_dispatch_pending_c != nil and wl_proxy_set_user_data_c != nil and
+    wl_proxy_get_user_data_c != nil and wl_proxy_set_tag_c != nil and
+    wl_proxy_get_tag_c != nil and wl_proxy_destroy_c != nil and
+    wl_proxy_get_version_c != nil and wl_proxy_get_id_c != nil and
+    wl_proxy_marshal_array_flags != nil and wl_proxy_marshal_flags != nil and
+    wl_proxy_add_dispatcher_c != nil
 
 proc dispatch*(this: Wl_display): int32 {.deprecated: "Use dispatchPending".} =
   ## Compatibility alias for the original public wrapper name.
   this.dispatchPending()
 
-proc newWlMessage*(name: cstring, signature: cstring, types: openarray[ptr Wl_interface]): WlMessage =
+proc newWlMessage*(
+    name: cstring, signature: cstring, types: openarray[ptr Wl_interface]
+): WlMessage =
   result.name = name
   result.signature = signature
-  result.types = cast[ptr UncheckedArray[ptr Wl_interface]](alloc0(types.len * sizeof(pointer)))
+  result.types =
+    cast[ptr UncheckedArray[ptr Wl_interface]](alloc0(types.len * sizeof(pointer)))
   for i, x in types:
     result.types[i] = x
 
 proc newWl_interface*(
-  name: cstring, version: int32,
-  methods: openarray[WlMessage],
-  events: openarray[WlMessage],
+    name: cstring,
+    version: int32,
+    methods: openarray[WlMessage],
+    events: openarray[WlMessage],
 ): Wl_interface =
   result.name = name
   result.version = version
 
   result.methodsLen = methods.len.int32
-  result.methods = cast[ptr UncheckedArray[WlMessage]](alloc0(methods.len * sizeof(WlMessage)))
+  result.methods =
+    cast[ptr UncheckedArray[WlMessage]](alloc0(methods.len * sizeof(WlMessage)))
   for i, x in methods:
     result.methods[i] = x
 
-  result.events = cast[ptr UncheckedArray[WlMessage]](alloc0(events.len * sizeof(WlMessage)))
+  result.events =
+    cast[ptr UncheckedArray[WlMessage]](alloc0(events.len * sizeof(WlMessage)))
   result.eventsLen = events.len.int32
   for i, x in events:
     result.events[i] = x
 
-proc construct*(proxy: pointer, interfaces: pointer, t: type, dispatcher: Wl_dispatcher_proc, callbacksT: type): t =
+proc construct*(
+    proxy: pointer,
+    interfaces: pointer,
+    t: type,
+    dispatcher: Wl_dispatcher_proc,
+    callbacksT: type,
+): t =
   result.proxy.raw = cast[ptr Wl_object](proxy)
   result.proxy.wl_proxy_set_tag(proxyNimTag.addr)
   let callbacks = cast[ptr callbacksT](alloc0(callbacksT.sizeof))
@@ -196,21 +329,27 @@ proc construct*(proxy: pointer, interfaces: pointer, t: type, dispatcher: Wl_dis
     dealloc(cb)
   discard result.proxy.wl_proxy_add_dispatcher(dispatcher, callbacks, nil)
 
-
 proc iface*(display: type Wl_display): ptr Wl_interface =
-  cast[ptr Wl_interface](display.raw)  # display is {proxy, ...}, proxy is {object, ...} and object is {ptr iface, ...} so it is safe to just cast pointer to ptr Wl_interface
+  cast[ptr Wl_interface](display.raw)
+    # display is {proxy, ...}, proxy is {object, ...} and object is {ptr iface, ...} so it is safe to just cast pointer to ptr Wl_interface
 
 template proxy*(x: Wl_display): Wl_display =
   x
 
-proc `==`*(a: WlProxyTyped, b: typeof nil): bool = a.proxy.raw == nil
-proc `==`*(a: Wl_proxy, b: typeof nil): bool = a.raw == nil
-proc `==`*(a: Wl_display, b: typeof nil): bool = a.raw == nil
+proc `==`*(a: WlProxyTyped, b: typeof nil): bool =
+  a.proxy.raw == nil
 
+proc `==`*(a: Wl_proxy, b: typeof nil): bool =
+  a.raw == nil
+
+proc `==`*(a: Wl_display, b: typeof nil): bool =
+  a.raw == nil
 
 proc toSeq*(x: Wl_array, t: type): seq[t] =
-  when t.sizeof != 4: {.error: "invalid type, must be 4 bytes long".}
+  when t.sizeof != 4:
+    {.error: "invalid type, must be 4 bytes long".}
   let len = x[].size div t.sizeof
-  if len == 0: return
+  if len == 0:
+    return
   result = newSeq[t](len)
   copyMem(result[0].addr, x[].data, len * sizeof(t))

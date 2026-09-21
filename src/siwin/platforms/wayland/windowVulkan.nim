@@ -11,17 +11,15 @@ privateAccess WindowWayland
 type
   Surface = object
     instance: pointer
-    raw: pointer
+    raw: uint64
 
   WindowWaylandVulkan* = ref WindowWaylandVulkanObj
   WindowWaylandVulkanObj* = object of WindowWayland
     vulkan_surface: Surface
 
-
 proc `=trace`(x: var WindowWaylandVulkanObj, env: pointer) =
   #? for some reason, without this, nim produces invalid C code for =trace implementation
   `=trace`(cast[ptr WindowWaylandObj](x.addr)[], env)
-
 
 proc `=destroy`*(window: WindowWaylandVulkanObj) {.siwin_destructor.} =
   release cast[WindowWaylandVulkan](window.addr)
@@ -30,22 +28,22 @@ proc `=destroy`*(window: WindowWaylandVulkanObj) {.siwin_destructor.} =
     when compiles(`=destroy`(x)):
       try:
         `=destroy`(x)
-      except: discard
+      except:
+        discard
 
 method release(window: WindowWaylandVulkan) =
   ## destroy wayland part of window
-  if window.vulkan_surface.instance != nil and window.vulkan_surface.raw != nil:
+  if window.vulkan_surface.instance != nil and window.vulkan_surface.raw != 0:
     # vkDestroySurfaceKHR(surface.instance, surface.raw, nil)  #? causes crash
     discard
 
   procCall window.WindowWayland.release()
 
-
-method vulkanSurface*(window: WindowWaylandVulkan): pointer =
+method vulkanSurface*(window: WindowWaylandVulkan): uint64 =
   window.vulkan_surface.raw
 
-
 proc initVulkanSurface(window: WindowWaylandVulkan, vkInstance: pointer) =
+  requireVulkanWayland()
   window.vulkan_surface.instance = vkInstance
   var info = VkWaylandSurfaceCreateInfoKHR(
     sType: VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
@@ -54,49 +52,66 @@ proc initVulkanSurface(window: WindowWaylandVulkan, vkInstance: pointer) =
     display: window.globals.display.raw,
     surface: cast[pointer](window.surface.proxy.raw),
   )
-  let res = vkCreateWaylandSurfaceKHR(vkInstance, info.addr, nil, window.vulkan_surface.raw.addr)
+  let res = vkCreateWaylandSurfaceKHR(
+    vkInstance, info.addr, nil, window.vulkan_surface.raw.addr
+  )
   if res != VK_SUCCESS:
     raise OSError.newException("Failed to create Vulkan surface, error: " & $res)
 
-
 proc initVulkanWindow(
-  window: WindowWaylandVulkan, vkInstance: pointer,
-  size: IVec2, screen: ScreenWayland,
-  fullscreen, frameless, transparent: bool, class: string
+    window: WindowWaylandVulkan,
+    vkInstance: pointer,
+    size: IVec2,
+    screen: ScreenWayland,
+    fullscreen, frameless, transparent: bool,
+    class: string,
 ) =
+  requireVulkanWayland()
   window.basicInitWindow size, screen
   window.setupWindow fullscreen, frameless, transparent, size, class
   window.configureSurface()
   window.initVulkanSurface(vkInstance)
 
-
 proc newVulkanWindowWayland*(
-  globals: SiwinGlobalsWayland,
-  vkInstance: pointer,
-  size = ivec2(1280, 720),
-  title = "",
-  screen: ScreenWayland,
-  resizable = true,
-  fullscreen = false,
-  frameless = false,
-  transparent = false,
-
-  class = "", # application ID; defaults to title
+    globals: SiwinGlobalsWayland,
+    vkInstance: pointer,
+    size = ivec2(1280, 720),
+    title = "",
+    screen: ScreenWayland,
+    resizable = true,
+    fullscreen = false,
+    frameless = false,
+    transparent = false,
+    class = "", # application ID; defaults to title
 ): WindowWaylandVulkan =
+  requireVulkanWayland()
   new result
   result.globals = globals
-  result.initVulkanWindow(vkInstance, size, screen, fullscreen, frameless, transparent, (if class == "": title else: class))
-  result.title = title
-  if not resizable: result.resizable = false
+  try:
+    result.initVulkanWindow(
+      vkInstance,
+      size,
+      screen,
+      fullscreen,
+      frameless,
+      transparent,
+      (if class == "": title else: class),
+    )
+    result.title = title
+    if not resizable:
+      result.resizable = false
+  except:
+    result.release()
+    raise
 
 proc newVulkanLayerSurfaceWindowWayland*(
-  globals: SiwinGlobalsWayland,
-  vkInstance: pointer,
-  size = ivec2(1280, 32),
-  title = "",
-  screen: ScreenWayland,
-  config: LayerSurfaceConfig,
-  transparent = false,
+    globals: SiwinGlobalsWayland,
+    vkInstance: pointer,
+    size = ivec2(1280, 32),
+    title = "",
+    screen: ScreenWayland,
+    config: LayerSurfaceConfig,
+    transparent = false,
 ): WindowWaylandVulkan =
   ## Creates a Vulkan window backed by a Wayland layer-shell surface.
   ##
@@ -106,9 +121,14 @@ proc newVulkanLayerSurfaceWindowWayland*(
   ##
   ## Raises `WaylandExtensionNotFound` when a required Wayland extension is
   ## unavailable.
+  requireVulkanWayland()
   new result
   result.globals = globals
-  result.initLayerSurfaceWindow(size, screen, config, transparent, title)
-  result.configureSurface()
-  result.initVulkanSurface(vkInstance)
-  result.title = title
+  try:
+    result.initLayerSurfaceWindow(size, screen, config, transparent, title)
+    result.configureSurface()
+    result.initVulkanSurface(vkInstance)
+    result.title = title
+  except:
+    result.release()
+    raise

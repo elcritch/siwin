@@ -9,30 +9,31 @@ type
     win*: EglWindow
 
   EglDisplay* = ptr object
-  
+
   EglConfig* = ptr object
-  
+
   EglContext* = ptr object
 
-  EglWindow* = ptr object
-    version: int
+  EglWindow* =
+    ptr object
+      version: int
 
-    width: int32
-    height: int32
-    dx: int32
-    dy: int32
+      width: int32
+      height: int32
+      dx: int32
+      dy: int32
 
-    attached_width: int32
-    attached_height: int32
+      attached_width: int32
+      attached_height: int32
 
-    driver_private: pointer
-    resize_callback: proc(win: EglWindow, userdata: pointer) {.cdecl.}
-    destroy_window_callback: proc(userdata: pointer) {.cdecl.}
+      driver_private: pointer
+      resize_callback: proc(win: EglWindow, userdata: pointer) {.cdecl.}
+      destroy_window_callback: proc(userdata: pointer) {.cdecl.}
 
-    surface: pointer
+      surface: pointer
 
   EglSurface* = ptr object
-  
+
   EglError* {.pure, size: 4.} = enum
     badAccess = 0x3002
     badAlloc = 0x3003
@@ -46,7 +47,6 @@ type
     badNativeWindow = 0x300B
     badParameter = 0x300C
     badSurface = 0x300D
-
 
 const
   eglSurfaceType* = int32 0x3033
@@ -70,40 +70,60 @@ const
 
   EGL_CONTEXT_CLIENT_VERSION* = int32 0x3098
 
-
 var
   initialized: bool
   egl_display: EglDisplay
 
-  libeglHandle = loadLib("libEGL.so")
-  libwaylandeglHandle = loadLib("libwayland-egl.so")
+proc loadFirst(names: openArray[string]): LibHandle =
+  for name in names:
+    result = loadLib(name)
+    if result != nil:
+      return
 
+let
+  libeglHandle = loadFirst(["libEGL.so", "libEGL.so.1"])
+  libwaylandeglHandle = loadFirst(["libwayland-egl.so", "libwayland-egl.so.1"])
 
 siwin_loadDynlibIfExists libeglHandle:
   proc eglGetError*(): EglError
   proc eglGetDisplay*(native: pointer): EglDisplay
 
-  proc eglInitialize*(d: EglDisplay; major: ptr int32 = nil; minor: ptr int32 = nil): bool
-  proc eglTerminate*(d: EglDisplay)
+  proc eglInitialize*(
+    d: EglDisplay, major: ptr int32 = nil, minor: ptr int32 = nil
+  ): cuint
 
-  proc eglChooseConfig*(d: EglDisplay; attrs: ptr int32; retConfigs: ptr EglConfig;
-      maxConfigs: int32; retConfigCount: ptr int32): bool
+  proc eglTerminate*(d: EglDisplay): cuint
 
-  proc eglCreateContext*(d: EglDisplay; config: EglConfig; share: EglContext = nil;
-      attrs: ptr int32 = nil): EglContext
+  proc eglChooseConfig*(
+    d: EglDisplay,
+    attrs: ptr int32,
+    retConfigs: ptr EglConfig,
+    maxConfigs: int32,
+    retConfigCount: ptr int32,
+  ): cuint
 
-  proc eglCreatePbufferSurface*(d: EglDisplay; config: EglConfig;
-      attrs: ptr int32 = nil): EglSurface
+  proc eglCreateContext*(
+    d: EglDisplay, config: EglConfig, share: EglContext = nil, attrs: ptr int32 = nil
+  ): EglContext
 
-  proc eglCreateWindowSurface*(d: EglDisplay; config: EglConfig; native_window: pointer; attrs: ptr int32 = nil): EglSurface
-  proc eglCreatePlatformWindowSurface*(d: EglDisplay; config: EglConfig; native_window: pointer; attrs: ptr int32 = nil): EglSurface
+  proc eglCreatePbufferSurface*(
+    d: EglDisplay, config: EglConfig, attrs: ptr int32 = nil
+  ): EglSurface
 
-  proc eglMakeCurrent*(d: EglDisplay; draw, read: EglSurface; ctx: EglContext): bool
-  proc eglSwapBuffers*(d: EglDisplay; srf: EglSurface): bool
+  proc eglCreateWindowSurface*(
+    d: EglDisplay, config: EglConfig, native_window: pointer, attrs: ptr int32 = nil
+  ): EglSurface
 
-  proc eglDestroyContext*(d: EglDisplay; ctx: EglContext): bool
-  proc eglDestroySurface*(d: EglDisplay; srf: EglSurface): bool
+  proc eglCreatePlatformWindowSurface*(
+    d: EglDisplay, config: EglConfig, native_window: pointer, attrs: ptr int32 = nil
+  ): EglSurface
 
+  proc eglMakeCurrent*(d: EglDisplay, draw, read: EglSurface, ctx: EglContext): cuint
+  proc eglGetCurrentContext*(): EglContext
+  proc eglSwapBuffers*(d: EglDisplay, srf: EglSurface): cuint
+
+  proc eglDestroyContext*(d: EglDisplay, ctx: EglContext): cuint
+  proc eglDestroySurface*(d: EglDisplay, srf: EglSurface): cuint
 
 siwin_loadDynlibIfExists libwaylandeglHandle:
   proc wl_egl_window_create*(surface: pointer, width, height: int32): EglWindow
@@ -111,101 +131,121 @@ siwin_loadDynlibIfExists libwaylandeglHandle:
   proc wl_egl_window_resize*(win: EglWindow, width, height: int32, dx, dy: int32)
   proc wl_egl_window_get_attached_size*(win: EglWindow, width, height: ptr int32)
 
-
 proc expect(x: bool) =
-  if not x: raise OsError.newException("Error creating OpenGL context (" & $eglGetError() & ")")
+  if not x:
+    raise OsError.newException("Error creating OpenGL context (" & $eglGetError() & ")")
 
+proc expect(x: cuint) =
+  if x == 0:
+    raise OsError.newException("Error creating OpenGL context (" & $eglGetError() & ")")
+
+proc requireEgl() =
+  if libeglHandle == nil or eglGetError == nil or eglGetDisplay == nil or
+      eglInitialize == nil or eglTerminate == nil or eglChooseConfig == nil or
+      eglCreateContext == nil or eglCreatePbufferSurface == nil or
+      eglCreateWindowSurface == nil or eglMakeCurrent == nil or
+      eglGetCurrentContext == nil or eglSwapBuffers == nil or eglDestroyContext == nil or
+      eglDestroySurface == nil:
+    raise OSError.newException("EGL library is not available")
+
+proc requireEglInitialized() =
+  requireEgl()
+  if not initialized or egl_display == nil:
+    raise OSError.newException("EGL has not been initialized")
+
+proc requireWaylandEgl*() =
+  requireEglInitialized()
+  if libwaylandeglHandle == nil or wl_egl_window_create == nil or
+      wl_egl_window_destroy == nil or wl_egl_window_resize == nil:
+    raise OSError.newException("wayland-egl library is not available")
 
 proc initEgl*(nativeDisplay: pointer) =
-  if initialized: return
-  initialized = true
-
-  if libeglHandle == nil: return
+  if initialized:
+    return
+  requireEgl()
 
   egl_display = eglGetDisplay(nativeDisplay)
   expect egl_display != nil
   expect eglInitialize(egl_display)
-
+  initialized = true
 
 proc destroy*(context: OpenglContext) =
-  # if context.win != nil:  #? causes crush
-  #   wl_egl_window_destroy(context.win)
-  if context.srf != nil:
+  if initialized and context.ctx != nil and eglGetCurrentContext != nil and
+      eglMakeCurrent != nil and eglGetCurrentContext() == context.ctx:
+    discard egl_display.eglMakeCurrent(nil, nil, nil)
+  if initialized and context.srf != nil and eglDestroySurface != nil:
     discard egl_display.eglDestroySurface(context.srf)
-  if context.ctx != nil:
+  if initialized and context.ctx != nil and eglDestroyContext != nil:
     discard egl_display.eglDestroyContext(context.ctx)
+  if context.win != nil and wl_egl_window_destroy != nil:
+    wl_egl_window_destroy(context.win)
 
-
-proc newOpenglContext*: OpenglContext =
+proc newOpenglContext*(): OpenglContext =
   ## creates opengl context (on new dummy surface)
-  var
-    config: EglConfig
-    configCount: int32
-  var attrs = [
-    eglSurfaceType, eglPBufferBit,
-    eglRenderableType, eglOpenglEs2Bit,
-    eglRedSize, 8,
-    eglGreenSize, 8,
-    eglBlueSize, 8,
-    eglAlphaSize, 8,
-    eglNone
-  ]
-  expect egl_display.eglChooseConfig(attrs[0].addr, config.addr, 1, configCount.addr)
-  expect configCount == 1
+  requireEglInitialized()
+  try:
+    var
+      config: EglConfig
+      configCount: int32
+    var attrs = [
+      eglSurfaceType, eglPBufferBit, eglRenderableType, eglOpenglEs2Bit, eglRedSize, 8,
+      eglGreenSize, 8, eglBlueSize, 8, eglAlphaSize, 8, eglNone,
+    ]
+    expect egl_display.eglChooseConfig(attrs[0].addr, config.addr, 1, configCount.addr)
+    expect configCount == 1
 
-  result.ctx = egl_display.eglCreateContext(config)
-  expect result.ctx != nil
+    result.ctx = egl_display.eglCreateContext(config)
+    expect result.ctx != nil
 
-  var attrs2 = [
-    eglWidth, 1,
-    eglHeight, 1,
-    eglNone
-  ]
-  result.srf = egl_display.eglCreatePbufferSurface(config, attrs2[0].addr)
-  expect result.srf != nil
-
+    var attrs2 = [eglWidth, 1, eglHeight, 1, eglNone]
+    result.srf = egl_display.eglCreatePbufferSurface(config, attrs2[0].addr)
+    expect result.srf != nil
+  except:
+    destroy result
+    result = OpenglContext()
+    raise
 
 proc newOpenglContext*(surface: pointer, w, h: int32): OpenglContext =
   ## creates opengl context (on window surface)
-  var
-    config: EglConfig
-    configCount: int32
-  let attrs = [
-    eglSurfaceType, eglWindowBit,
-    eglRedSize, 8,
-    eglGreenSize, 8,
-    eglBlueSize, 8,
-    eglAlphaSize, 8,
-    eglRenderableType, eglOpenglEs2Bit,
-    eglNone,
-  ]
-  expect egl_display.eglChooseConfig(attrs[0].addr, config.addr, 1, configCount.addr)
-  expect configCount == 1
+  requireWaylandEgl()
+  try:
+    var
+      config: EglConfig
+      configCount: int32
+    let attrs = [
+      eglSurfaceType, eglWindowBit, eglRedSize, 8, eglGreenSize, 8, eglBlueSize, 8,
+      eglAlphaSize, 8, eglRenderableType, eglOpenglEs2Bit, eglNone,
+    ]
+    expect egl_display.eglChooseConfig(attrs[0].addr, config.addr, 1, configCount.addr)
+    expect configCount == 1
 
-  let context_attrs = [
-    EGL_CONTEXT_CLIENT_VERSION, 2,
-    eglNone,
-  ]
-  result.ctx = egl_display.eglCreateContext(config, nil, context_attrs[0].addr)
-  expect result.ctx != nil
-  
-  result.win = wl_egl_window_create(surface, w, h)
-  expect result.win != nil
+    let context_attrs = [EGL_CONTEXT_CLIENT_VERSION, 2, eglNone]
+    result.ctx = egl_display.eglCreateContext(config, nil, context_attrs[0].addr)
+    expect result.ctx != nil
 
-  result.srf = egl_display.eglCreateWindowSurface(config, result.win, nil)
-  expect result.srf != nil
+    result.win = wl_egl_window_create(surface, w, h)
+    expect result.win != nil
 
+    result.srf = egl_display.eglCreateWindowSurface(config, result.win, nil)
+    expect result.srf != nil
+  except:
+    destroy result
+    result = OpenglContext()
+    raise
 
 proc makeCurrent*(context: OpenglContext) =
+  requireEglInitialized()
   expect egl_display.eglMakeCurrent(context.srf, context.srf, context.ctx)
 
-
 proc swapBuffers*(context: OpenglContext) =
+  requireEglInitialized()
   expect egl_display.eglSwapBuffers(context.srf)
 
-
-proc terminateEgl* =
-  if not initialized: return
+proc terminateEgl*() =
+  if not initialized:
+    return
   initialized = false
-  
-  eglTerminate(egl_display)
+
+  if eglTerminate != nil:
+    discard eglTerminate(egl_display)
+  egl_display = nil

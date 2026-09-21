@@ -1,14 +1,18 @@
-import x11/[x, xlib]
+import x11/x
+import ./x11api
 
 const vkDLL =
-  when defined(windows): "vulkan-1.dll"
-  elif defined(macosx): "libMoltenVK.dylib"
-  else: "libvulkan.so.1"
+  when defined(windows):
+    "vulkan-1.dll"
+  elif defined(macosx):
+    "libMoltenVK.dylib"
+  else:
+    "libvulkan.so.1"
 
 type
   VkStructureType* {.size: int32.sizeof.} = enum
     VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR = 1000004000
-  
+
   VkResult* {.size: int32.sizeof.} = enum
     VK_ERROR_FRAGMENTED_POOL = -12
     VK_ERROR_FORMAT_NOT_SUPPORTED = -11
@@ -28,7 +32,7 @@ type
     VK_EVENT_SET = 3
     VK_EVENT_RESET = 4
     VK_INCOMPLETE = 5
-  
+
   VkXlibSurfaceCreateInfoKHR* = object
     sType*: VkStructureType
     pNext*: pointer
@@ -36,15 +40,26 @@ type
     dpy*: ptr Display
     window*: Window
 
+let libVulkanHandle =
+  loadFirst([vkDLL, when defined(linux) or defined(bsd): "libvulkan.so" else: vkDLL])
 
-{.push, cdecl, stdcall, dynlib: vkDLL, importc.}
+type
+  VkCreateXlibSurfaceProc = proc(
+    instance: pointer,
+    pCreateInfo: ptr VkXlibSurfaceCreateInfoKHR,
+    pAllocator: pointer,
+    pSurface: ptr uint64,
+  ): VkResult {.cdecl.}
 
-proc vkCreateXlibSurfaceKHR*(
-  instance: pointer,
-  pCreateInfo: ptr VkXlibSurfaceCreateInfoKHR,
-  pAllocator: pointer,
-  pSurface: ptr pointer): VkResult
+  VkDestroySurfaceProc =
+    proc(instance: pointer, surface: uint64, pAllocator: pointer) {.cdecl.}
 
-proc vkDestroySurfaceKHR*(instance: pointer, surface: pointer, pAllocator: pointer)
+let
+  vkCreateXlibSurfaceKHR* =
+    loadProc[VkCreateXlibSurfaceProc](libVulkanHandle, "vkCreateXlibSurfaceKHR")
+  vkDestroySurfaceKHR* =
+    loadProc[VkDestroySurfaceProc](libVulkanHandle, "vkDestroySurfaceKHR")
 
-{.pop.}
+proc requireVulkanXlib*() =
+  if libVulkanHandle == nil or vkCreateXlibSurfaceKHR == nil:
+    raise OSError.newException("Vulkan loader or Xlib surface support is not available")

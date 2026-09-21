@@ -1,14 +1,17 @@
 import winapi
 
 const vkDLL =
-  when defined(windows): "vulkan-1.dll"
-  elif defined(macosx): "libMoltenVK.dylib"
-  else: "libvulkan.so.1"
+  when defined(windows):
+    "vulkan-1.dll"
+  elif defined(macosx):
+    "libMoltenVK.dylib"
+  else:
+    "libvulkan.so.1"
 
 type
   VkStructureType* {.size: int32.sizeof.} = enum
     VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR = 1000009000
-  
+
   VkResult* {.size: int32.sizeof.} = enum
     VK_ERROR_FRAGMENTED_POOL = -12
     VK_ERROR_FORMAT_NOT_SUPPORTED = -11
@@ -28,29 +31,26 @@ type
     VK_EVENT_SET = 3
     VK_EVENT_RESET = 4
     VK_INCOMPLETE = 5
-  
+
   VkWin32SurfaceCreateInfoKHR* = object
     sType*: VkStructureType
     pNext*: pointer
     flags*: uint32
     hInstance*: HInstance
     window*: Hwnd
-  
+
   VkCreateWin32SurfaceKHR* = proc(
     instance: pointer,
     pCreateInfo: ptr VkWin32SurfaceCreateInfoKHR,
     pAllocator: pointer,
-    pSurface: ptr pointer
+    pSurface: ptr uint64,
   ): VkResult {.cdecl, stdcall, raises: [].}
 
-  VkDestroySurfaceKHR* = proc(
-    instance: pointer,
-    surface: pointer,
-    pAllocator: pointer
-  ) {.cdecl, stdcall, raises: [].}
+  VkDestroySurfaceKHR* = proc(instance: pointer, surface: uint64, pAllocator: pointer) {.
+    cdecl, stdcall, raises: []
+  .}
 
-
-{.push, cdecl, stdcall, dynlib: vkDLL, importc.}
+{.push cdecl, stdcall, dynlib: vkDLL, importc.}
 
 proc vkGetInstanceProcAddr*(instance: pointer, procName: cstring): pointer
 
